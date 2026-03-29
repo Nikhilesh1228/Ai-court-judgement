@@ -1,0 +1,8 @@
+transformers==5.3.0
+torch==2.3.0+cu121
+datasets==2.20.0
+pandas==2.2.2
+scikit-learn==1.6.1
+lime==0.2.0.1
+fastapi==0.135.1
+uvicorn==0.41.0
