@@ -3,45 +3,99 @@ import torch
 from transformers import AutoTokenizer, BertForSequenceClassification, T5ForConditionalGeneration
 from lime.lime_text import LimeTextExplainer
 
-# Page Config
+# Page config
 st.set_page_config(page_title="AI Legal Judgment", page_icon="⚖️", layout="wide")
 
-# Custom CSS (Premium Look)
+# 🔥 ULTRA PREMIUM CSS
 st.markdown("""
 <style>
-body {
-    background-color: #0E1117;
+
+/* Gradient Background */
+.stApp {
+    background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+    color: white;
 }
-.main-title {
+
+/* Title */
+.title {
     text-align: center;
-    font-size: 45px;
+    font-size: 50px;
     font-weight: bold;
-    color: #00E5FF;
+    background: -webkit-linear-gradient(#00E5FF, #00FFAA);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
 }
+
+/* Subtitle */
 .subtitle {
     text-align: center;
-    color: #B0BEC5;
+    color: #cfd8dc;
     margin-bottom: 30px;
 }
+
+/* Glass Card */
 .card {
-    background-color: #1E1E1E;
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(12px);
     padding: 20px;
     border-radius: 15px;
-    box-shadow: 0px 0px 15px rgba(0,0,0,0.5);
+    border: 1px solid rgba(255,255,255,0.1);
 }
-.result-box {
-    background-color: #263238;
+
+/* Input box */
+textarea {
+    background-color: rgba(0,0,0,0.6) !important;
+    color: white !important;
+    border-radius: 10px !important;
+}
+
+/* Button */
+.stButton>button {
+    background: linear-gradient(90deg, #00E5FF, #00FFAA);
+    color: black;
+    font-weight: bold;
+    border-radius: 10px;
+    height: 50px;
+}
+
+/* Prediction */
+.pred {
+    background: #00C853;
+    color: black;
+    padding: 15px;
+    border-radius: 10px;
+    font-weight: bold;
+    text-align: center;
+}
+
+/* Summary */
+.summary {
+    background: #1565C0;
     padding: 15px;
     border-radius: 10px;
 }
+
+/* Chips */
+.chip {
+    display: inline-block;
+    padding: 6px 12px;
+    margin: 5px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.pos { background-color: #00C853; color: black; }
+.neg { background-color: #D50000; color: white; }
+
 </style>
 """, unsafe_allow_html=True)
 
-# Title Section
-st.markdown('<div class="main-title">⚖️ AI Legal Judgment Analyzer</div>', unsafe_allow_html=True)
-st.markdown('<div class="subtitle">AI-powered classification, summarization & explanation</div>', unsafe_allow_html=True)
+# Title
+st.markdown('<div class="title">⚖️ AI Legal Judgment Analyzer</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle">AI-powered classification • summarization • explanation</div>', unsafe_allow_html=True)
 
-# Load Models
+# Load models
 @st.cache_resource
 def load_models():
     bert_tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
@@ -56,7 +110,7 @@ def load_models():
 
 bert_tokenizer, bert_model, t5_tokenizer, t5_model, explainer = load_models()
 
-# Input Section
+# Input
 st.markdown("### 📝 Enter Judgment Text")
 text = st.text_area("", height=180, placeholder="Paste legal judgment text here...")
 
@@ -97,22 +151,25 @@ if st.button("🚀 Analyze", use_container_width=True):
                 num_samples=100
             )
 
-        # Layout Output
         col1, col2 = st.columns(2)
 
         with col1:
             st.markdown("### 📊 Prediction")
-            st.markdown(f'<div class="result-box">{result}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="pred">{result}</div>', unsafe_allow_html=True)
 
             st.markdown("### 📄 Summary")
-            st.markdown(f'<div class="card">{summary}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="summary">{summary}</div>', unsafe_allow_html=True)
 
         with col2:
-            st.markdown("### 🔍 Key Explanation")
-            st.markdown('<div class="card">', unsafe_allow_html=True)
-            st.write(explanation.as_list())
-            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown("### 🔍 Key Factors")
+
+            chips_html = ""
+            for word, score in explanation.as_list():
+                cls = "pos" if score > 0 else "neg"
+                chips_html += f'<span class="chip {cls}">{word}</span>'
+
+            st.markdown(f'<div class="card">{chips_html}</div>', unsafe_allow_html=True)
 
 # Footer
 st.markdown("---")
-st.markdown("💡 Built with Streamlit | AI Legal Tech Project")
+st.markdown("💼 Built by Nikhilesh | AI Legal Tech Project")
