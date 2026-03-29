@@ -1,117 +1,100 @@
+import streamlit as st
 import torch
-import numpy as np
-from fastapi import FastAPI
-from pydantic import BaseModel
 from transformers import AutoTokenizer, BertForSequenceClassification, T5ForConditionalGeneration
 from lime.lime_text import LimeTextExplainer
-import uvicorn
 
-# Instantiate FastAPI application
-app = FastAPI()
+# Page config
+st.set_page_config(page_title="AI Legal Judgment", page_icon="⚖️", layout="wide")
 
-# Global variables for models and tokenizers
-bert_tokenizer = None
-bert_model = None
-t5_tokenizer = None
-t5_model = None
-explainer = None
+# Custom CSS
+st.markdown("""
+    <style>
+    .main {
+        background-color: #0E1117;
+    }
+    .title {
+        text-align: center;
+        font-size: 40px;
+        font-weight: bold;
+        color: #00FFAA;
+    }
+    .sub {
+        text-align: center;
+        color: #AAAAAA;
+        margin-bottom: 20px;
+    }
+    .box {
+        background-color: #1E1E1E;
+        padding: 20px;
+        border-radius: 10px;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
-# Define a request body schema
-class JudgmentText(BaseModel):
-    judgment_text: str
+# Title
+st.markdown('<p class="title">⚖️ AI Legal Judgment System</p>', unsafe_allow_html=True)
+st.markdown('<p class="sub">Analyze legal text with AI (Classification + Summary + Explanation)</p>', unsafe_allow_html=True)
 
-# Function to load models and tokenizers
+@st.cache_resource
 def load_models():
-    global bert_tokenizer, bert_model, t5_tokenizer, t5_model, explainer
+    bert_tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
+    bert_model = BertForSequenceClassification.from_pretrained("distilbert-base-uncased")
 
-    # Load BERT tokenizer and model
-    bert_tokenizer = AutoTokenizer.from_pretrained("legal_bert_model")
-    bert_model = BertForSequenceClassification.from_pretrained("legal_bert_model")
-    bert_model.eval()  # Set BERT model to evaluation mode
+    t5_tokenizer = AutoTokenizer.from_pretrained("t5-small")
+    t5_model = T5ForConditionalGeneration.from_pretrained("t5-small")
 
-    # Load T5 tokenizer and model
-    t5_tokenizer = AutoTokenizer.from_pretrained("t5_summarization_model") # Changed to AutoTokenizer
-    t5_model = T5ForConditionalGeneration.from_pretrained("t5_summarization_model")
-    t5_model.eval() # Set T5 model to evaluation mode
+    bert_model.eval()
+    t5_model.eval()
 
-    # Instantiate LimeTextExplainer
     explainer = LimeTextExplainer(class_names=['Rejected', 'Accepted'])
 
-    print("Models, tokenizers, and explainer loaded successfully!")
+    return bert_tokenizer, bert_model, t5_tokenizer, t5_model, explainer
 
-# Define the prediction function for LIME, using the BERT model
-def predictor(texts):
-    # Tokenize the input texts using the BERT tokenizer
-    inputs = bert_tokenizer(
-        list(texts),
-        truncation=True,
-        padding=True,
-        max_length=128,
-        return_tensors="pt"
-    )
+bert_tokenizer, bert_model, t5_tokenizer, t5_model, explainer = load_models()
 
-    # Move inputs to the same device as the model
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    inputs = {k: v.to(device) for k, v in inputs.items()}
-    bert_model.to(device) # Ensure model is on the correct device
+# Input Section
+st.markdown("### 📝 Enter Judgment Text")
+text = st.text_area("", height=200)
 
-    # Get model outputs (logits) from the BERT model
-    with torch.no_grad():
-        outputs = bert_model(**inputs)
+# Button
+if st.button("🚀 Analyze", use_container_width=True):
 
-    # Apply softmax to get probabilities
-    probabilities = torch.nn.functional.softmax(outputs.logits, dim=1)
+    with st.spinner("Processing... ⏳"):
 
-    # Convert probabilities to a NumPy array
-    return probabilities.cpu().numpy()
+        # Prediction
+        inputs = bert_tokenizer(text, return_tensors="pt", truncation=True, padding=True)
+        with torch.no_grad():
+            outputs = bert_model(**inputs)
 
-# FastAPI startup event to load models
-@app.on_event("startup")
-async def startup_event():
-    load_models()
+        pred = torch.argmax(outputs.logits).item()
+        result = "✅ Accepted" if pred == 1 else "❌ Rejected"
 
-# Define the prediction endpoint
-@app.post("/predict")
-async def predict_judgment(item: JudgmentText):
-    # Classification using BERT
-    bert_inputs = bert_tokenizer(item.judgment_text, return_tensors="pt", truncation=True, padding=True, max_length=128)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    bert_inputs = {k: v.to(device) for k, v in bert_inputs.items()}
+        # Summary
+        t5_input = "summarize: " + text
+        t5_inputs = t5_tokenizer.encode(t5_input, return_tensors="pt", truncation=True)
+        summary_ids = t5_model.generate(t5_inputs, max_length=100)
+        summary = t5_tokenizer.decode(summary_ids[0], skip_special_tokens=True)
 
-    with torch.no_grad():
-        bert_outputs = bert_model(**bert_inputs)
-    bert_pred_idx = torch.argmax(bert_outputs.logits).item()
-    bert_prediction = 'Accepted' if bert_pred_idx == 1 else 'Rejected'
+        # LIME
+        def predictor(texts):
+            inputs = bert_tokenizer(list(texts), return_tensors="pt", truncation=True, padding=True)
+            with torch.no_grad():
+                outputs = bert_model(**inputs)
+            probs = torch.nn.functional.softmax(outputs.logits, dim=1)
+            return probs.numpy()
 
-    # Summarization using T5
-    t5_input_text = "summarize: " + item.judgment_text
-    t5_inputs = t5_tokenizer.encode(t5_input_text, return_tensors="pt", truncation=True)
-    t5_inputs = t5_inputs.to(device)
+        explanation = explainer.explain_instance(text, predictor, num_features=6)
 
-    t5_summary_ids = t5_model.generate(
-        t5_inputs,
-        max_length=120,
-        min_length=30,
-        num_beams=4,
-        early_stopping=True
-    )
-    t5_summary = t5_tokenizer.decode(t5_summary_ids[0], skip_special_tokens=True)
+    # Output Section
+    col1, col2 = st.columns(2)
 
-    # LIME Explanation
-    explanation = explainer.explain_instance(
-        item.judgment_text,
-        predictor,
-        num_features=6, # Number of features to highlight
-        num_samples=1000 # Number of perturbations
-    )
-    lime_explanation = explanation.as_list()
+    with col1:
+        st.markdown("### 📊 Prediction")
+        st.success(result)
 
-    return {
-        "classification": bert_prediction,
-        "summary": t5_summary,
-        "lime_explanation": lime_explanation
-    }
+        st.markdown("### 📄 Summary")
+        st.info(summary)
 
-# Run the FastAPI app with uvicorn
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    with col2:
+        st.markdown("### 🔍 Explanation")
+        st.write(explanation.as_list())
