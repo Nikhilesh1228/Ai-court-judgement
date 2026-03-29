@@ -172,4 +172,4 @@ if st.button("🚀 Analyze", use_container_width=True):
 
 # Footer
 st.markdown("---")
-st.markdown("💼 Built by Nikhilesh | AI Legal Tech Project")
+st.markdown(" AI Legal Tech Project")
