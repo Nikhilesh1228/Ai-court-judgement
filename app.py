@@ -1,5 +1,6 @@
 import streamlit as st
 import torch
+import re
 from transformers import AutoTokenizer, BertForSequenceClassification, T5ForConditionalGeneration
 from lime.lime_text import LimeTextExplainer
 
@@ -10,7 +11,7 @@ st.set_page_config(page_title="AI Legal Judgment", page_icon="⚖️", layout="w
 st.markdown("""
 <style>
 
-/* Gradient Background */
+/* Background */
 .stApp {
     background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
     color: white;
@@ -33,7 +34,7 @@ st.markdown("""
     margin-bottom: 30px;
 }
 
-/* Glass Card */
+/* Card */
 .card {
     background: rgba(255, 255, 255, 0.05);
     backdrop-filter: blur(12px);
@@ -42,7 +43,7 @@ st.markdown("""
     border: 1px solid rgba(255,255,255,0.1);
 }
 
-/* Input box */
+/* Input */
 textarea {
     background-color: rgba(0,0,0,0.6) !important;
     color: white !important;
@@ -79,7 +80,7 @@ textarea {
 .chip {
     display: inline-block;
     padding: 6px 12px;
-    margin: 5px;
+    margin: 6px;
     border-radius: 20px;
     font-size: 14px;
     font-weight: bold;
@@ -147,9 +148,19 @@ if st.button("🚀 Analyze", use_container_width=True):
             explanation = explainer.explain_instance(
                 text,
                 predictor,
-                num_features=4,
+                num_features=6,
                 num_samples=100
             )
+
+            # 🔥 Filter stopwords
+            stopwords = {"the", "is", "and", "a", "an", "of", "to", "in", "on", "for"}
+            filtered_explanation = []
+
+            for word, score in explanation.as_list():
+                clean_word = re.sub(r'[^a-zA-Z]', '', word.lower())
+
+                if clean_word not in stopwords and len(clean_word) > 2:
+                    filtered_explanation.append((clean_word, score))
 
         col1, col2 = st.columns(2)
 
@@ -161,15 +172,16 @@ if st.button("🚀 Analyze", use_container_width=True):
             st.markdown(f'<div class="summary">{summary}</div>', unsafe_allow_html=True)
 
         with col2:
-            st.markdown("### 🔍 Key Factors")
+            st.markdown("### 🔍 Key Legal Factors")
 
             chips_html = ""
-            for word, score in explanation.as_list():
+
+            for word, score in filtered_explanation:
                 cls = "pos" if score > 0 else "neg"
-                chips_html += f'<span class="chip {cls}">{word}</span>'
+                chips_html += f'<span class="chip {cls}">{word}</span> '
 
             st.markdown(f'<div class="card">{chips_html}</div>', unsafe_allow_html=True)
 
 # Footer
 st.markdown("---")
-st.markdown(" AI Legal Tech Project")
+st.markdown("💼 Built by Nikhilesh | AI Legal Tech Project")
