@@ -1,8 +1,4 @@
-fastapi
-uvicorn
+streamlit
 torch
 transformers
-datasets
-pandas
-scikit-learn
 lime
